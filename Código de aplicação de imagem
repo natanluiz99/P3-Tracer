@@ -5,43 +5,31 @@ from imutils import contours
 from imutils import perspective
 from scipy.spatial import distance as dist
 from matplotlib import pyplot as plt
-
+################importação de bibliotecas#################
 imagemTeste = cv2.imread('./documentos/trab/imagemTeste.jpeg')    #localização do arquivo varia
 plt.imshow(imagemTeste)
 plt.show()
-
 gray = cv2.cvtColor(imagemTeste, cv2.COLOR_BGR2GRAY)
 gray = cv2.GaussianBlur(gray, (7, 7), 0)
-
-# Let's see how the gray-scaled image looks like
+###############RECEBE A IMAGEM E APLICA FILTRO#########################
 plt.imshow(gray)
 plt.show()
-
 edged = cv2.Canny(gray, 50, 100)
 edged = cv2.dilate(edged, None, iterations=1)
 edged = cv2.erode(edged, None, iterations=1)
-
-# Display the result
 plt.imshow(edged)
 plt.show()
-
-# find contours in the edge map
+###############APLICA PONTOS DAS BORDAS DO OBJETO######################
 cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 cnts = imutils.grab_contours(cnts)
-
-# Print the result
-# print(cnts)
-# sort the contours from left-to-right and
-
 (cnts, _) = contours.sort_contours(cnts)
 cmax = max(cnts, key=cv2.contourArea)
 # print(cmax) # Prints [[[646  35]], [[645  36]], [[644  37]] ... [[649  35]], [[648  35]], [[647  35]]]
-
-# Get the image moment and use it to find the centre
+################LIGA OS PONTOS E SELECIONA OS PONTOS ESPECIFICOS####################
 M = cv2.moments(cmax)
 # print(M)
-
-# Find the center
+################ACHA O MOMENTO IMAGEM(PIXEL COM CONTRASTE)##########################
+# DETERMINA O CENTRO
 cX = int(M["m10"] / M["m00"])
 cY = int(M["m01"] / M["m00"])
 print(cX, cY)
@@ -52,74 +40,55 @@ blank_image.fill(255) # or img[:] = 255
 blank_image =cv2.cvtColor(blank_image, cv2.COLOR_RGB2BGR)
 blank_image[:] = (216, 216, 216)
 blank_image[:] = (216, 216, 216)
-
-# Display the result
+################CRIA A IMAGEM RECEPTORA EM BRANCO###################################
 plt.imshow(blank_image)
 plt.show()
-
 pixels_per_metric = None
-known_width = 0.995 # Width of a US quarter (in inches)
-
-# First define a helper function that calculates the mid-point between 2 pairs of coordinates
-
+known_width = 0.995 # TAMANHO DE MOEDA EM POLEGADAS
+################PIXEL POR MÉTRICA###################################################
 def midpoint(ptA, ptB):
     return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
-   
-# loop over the contours to examine them
+################LOOP PARA RECONHECIMENTO DE CONTORNOS
 for c in cnts:
     if cv2.contourArea(c) < 100:
         continue
     orig = imagemTeste.copy()
-    
     box = cv2.minAreaRect(c)
     box = cv2.cv.BoxPoints(box) if imutils.is_cv2() else cv2.boxPoints(box)
     box = np.array(box, dtype="int")
-    
-    # order the points in the contour such that they appear in top-left, top-right, bottom-right, and bottom-left order,
-    # then draw the outline of the rotated bounding box
+    # ORDEM DE CONTORNOS, ÁREAS DA CAIXA DE CONTORNO
     box = perspective.order_points(box)
     cv2.drawContours(orig, [box.astype("int")], -1, (0, 255, 0), 2)
     
-    # Calculate the pixels_per_metric variable
+################CALCULO DE PIXEL POR MÉTRICA#############################
     if pixels_per_metric is None:
         (tl, tr, br, bl) = box
         (tlblX, tlblY) = midpoint(tl, bl)
         (trbrX, trbrY) = midpoint(tr, br)
         dB = dist.euclidean((tlblX, tlblY), (trbrX, trbrY))
         pixels_per_metric = dB / known_width
-
-    # If the contour is that of the T-shirt, then calculate the following:
+################SE É O CONTORNO DO OBJETO CERTO##########################
     if cv2.contourArea(c) == cv2.contourArea(cmax):
         cv2.drawContours(blank_image, [cmax], -1, (255, 255, 255), -1)
         # calculate the top for the left sleeve
         leftSleeve_top = tuple(c[c[:, :, 0].argmin()][0])
-
-        # intialize ext bottom ext top and centres
         extBotleft = (0, 0)
         extTop = (0, 0)
         centre = (cX, cY)
-
-        # Calculate the extreme top point of the contour
         for yp in range(cY, 0, -1):
             isOnContour = cv2.pointPolygonTest(c, (cX, yp), False)
             if isOnContour == 0:
                 extTop = (cX, yp)
                 break
-        
-        # calculate the bottom left point of the contour
         for xp in range(cX, 0, -1):
             isOnContour = cv2.pointPolygonTest(c, (xp, cY), False)
             if isOnContour == 0:
                 extBotleft = (xp, cY)
                 break
-
         widx = dist.euclidean(centre, extBotleft)
         widy = dist.euclidean(centre, extTop)
-
         extBotRight = (int(cX + widx), cY)
         extDown = (cX, int(cY + widy))
-
-        # calculate the bottom point of the left sleeve
         leftSleeve_bottom = (0, 0)
         yold = leftSleeve_top[1]
         found = False
@@ -133,8 +102,7 @@ for c in cnts:
                     leftSleeve_bottom = tuple(y)
                 else:
                     yold = y[1]
-
-        # Draw points
+##############DESENVOLVE OS PONTOS#####################################
         cv2.circle(orig, leftSleeve_top, 8, (0, 0, 255), -1)
         cv2.circle(orig, leftSleeve_bottom, 7, (255, 255, 255), -1)
         cv2.circle(orig, extBotleft, 8, (255, 255, 0), -1)
